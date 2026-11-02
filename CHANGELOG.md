@@ -146,6 +146,14 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   its tools to every Bot, including Bots made later. It can no longer be removed, and a Bot's
   Routines tools can no longer be taken away.
 
+### An app whose name has a `}` in it gets its app card
+
+The card a conversation draws for an app a Bot cannot use yet was read from JSON that was cut at the
+first `}`, so a server added by URL under a name such as `Deploys {staging}` cut its own title in
+half. The card was never drawn: a refused call showed its raw marker text instead of a Connect
+button, `show_app_access` showed nothing at all, and a memory source syncing from that app reported
+the raw marker as its error. The JSON is now read to the brace that actually closes it.
+
 ### A personal edition for one person on one computer
 
 Set `OPENBOT_EDITION=personal`, with single-user mode and one computer, for an OpenBot without the
