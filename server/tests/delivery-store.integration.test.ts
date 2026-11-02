@@ -167,6 +167,38 @@ test("outbound dedupe and atomic send transition preserve provider id, errors an
       .where(eq(deliveryOutbox.ownerUserId, owner)),
   ).toHaveLength(1);
 });
+test("an SMS status callback that arrives late never moves a delivered or failed text back to sent", async () => {
+  // Twilio sends `sent` then `delivered` (or `undelivered`), and does not promise they arrive in order.
+  const states: string[] = [];
+  for (const [label, final] of [
+    ["delivered", "delivered"],
+    ["undelivered", "failed"],
+  ] as const) {
+    const row = await store.offerOutbox({
+      ...scope,
+      dedupeKey: `${prefix}:sms-order:${label}`,
+      bindingId: null,
+      deviceId: null,
+      transport: "sms",
+      text: "Reply",
+      kind: "reply",
+      requestId: null,
+    });
+    if (!row) throw new Error("Expected outbox row");
+    workKeys.push(row.id);
+    const sid = `SM-${prefix}-${label}`;
+    await store.setOutbox(row.id, "accepted", null, sid);
+    await store.updateSmsStatus(
+      sid,
+      final,
+      final === "failed" ? "30003" : null,
+    );
+    await store.updateSmsStatus(sid, "sent", null);
+    const current = await store.outbox(row.id);
+    states.push(`${current?.state}:${current?.error}`);
+  }
+  expect(states).toEqual(["delivered:null", "failed:30003"]);
+});
 test("a paired chat turn is recorded once, running, and never queued", async () => {
   const binding = await store.bind({
     ...scope,

@@ -146,6 +146,13 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   its tools to every Bot, including Bots made later. It can no longer be removed, and a Bot's
   Routines tools can no longer be taken away.
 
+### A delivered text message stays delivered
+
+Twilio sends a text's `sent` and then its `delivered` or `undelivered` status as separate callbacks,
+and does not promise they arrive in order. When `sent` landed last, delivery history moved a
+delivered text back to sent, and a failed one back to sent with its error code cleared. A late `sent`
+now leaves a delivered or failed text as it is.
+
 ### A personal edition for one person on one computer
 
 Set `OPENBOT_EDITION=personal`, with single-user mode and one computer, for an OpenBot without the
