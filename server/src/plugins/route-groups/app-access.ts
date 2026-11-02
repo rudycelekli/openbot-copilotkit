@@ -14,9 +14,10 @@ import {
   ownerGrantRefusal,
   withdrawOwnersSharedUse,
 } from "../owner-grants";
-import type {
-  AppAccessRequestRecord,
-  AppDirectory,
+import {
+  type AppAccessRequestRecord,
+  type AppDirectory,
+  PendingRequestCapError,
 } from "../plugin-store/app-access";
 import {
   CatalogueEntryUnknownError,
@@ -511,14 +512,22 @@ export function mountAppAccessRoutes({
     if (asked instanceof Response) return asked;
     const { agentId, access, requestKind } = asked;
     /*
-     * The one already waiting is answered as itself before the cap is counted, so a person at the
-     * cap pressing again on a request they filed is shown it, not refused.
+     * The cap is counted by the store, under the same lock as the write, and after the one already
+     * waiting is looked for — so a person at the cap pressing again on a request they filed is shown
+     * it, not refused, and two presses at once cannot both count one under it.
      */
-    if (
-      !access.request &&
-      (await store.countPendingAppAccessRequests(context.var.actor.id)) >=
-        MAX_PENDING_REQUESTS
-    )
+    let filed: Awaited<ReturnType<typeof store.fileAppAccessRequest>>;
+    try {
+      filed = await store.fileAppAccessRequest({
+        requestedBy: context.var.actor.id,
+        agentId,
+        appKey: access.key,
+        appTitle: access.displayName,
+        kind: requestKind,
+        cap: MAX_PENDING_REQUESTS,
+      });
+    } catch (error) {
+      if (!(error instanceof PendingRequestCapError)) throw error;
       return refused(context, {
         app: access.key,
         bot: agentId,
@@ -527,13 +536,7 @@ export function mountAppAccessRoutes({
         error: `You already have ${MAX_PENDING_REQUESTS} requests waiting for an admin. Withdraw one, or wait for an answer, then ask again.`,
         status: 429,
       });
-    const filed = await store.fileAppAccessRequest({
-      requestedBy: context.var.actor.id,
-      agentId,
-      appKey: access.key,
-      appTitle: access.displayName,
-      kind: requestKind,
-    });
+    }
     return context.json(filed, filed.created ? 201 : 200);
   });
 

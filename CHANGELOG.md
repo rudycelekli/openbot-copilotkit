@@ -146,6 +146,14 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   its tools to every Bot, including Bots made later. It can no longer be removed, and a Bot's
   Routines tools can no longer be taken away.
 
+### Asking for several apps at once cannot take a person past 20 waiting requests
+
+The cap on how many app requests one person may have waiting for an admin was counted by the route
+and written by the store, so requests sent together — two presses, or two replicas answering them —
+each counted the same number under the cap and each filed, leaving the person past it. The count and
+the write now happen under one lock per person, as the routine cap already does, and the request
+over the cap is refused with the same 429 and `too_many_pending` audit row as before.
+
 ### A personal edition for one person on one computer
 
 Set `OPENBOT_EDITION=personal`, with single-user mode and one computer, for an OpenBot without the
