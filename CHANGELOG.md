@@ -146,6 +146,14 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   its tools to every Bot, including Bots made later. It can no longer be removed, and a Bot's
   Routines tools can no longer be taken away.
 
+### A Bot's answer after a sign-in reaches you where you asked
+
+When a Bot working from Slack, SMS or a routine needed you to sign in to a site, the link reached you
+on that channel, but once you signed in the Bot's continued answer was only written to the
+conversation in the app and never sent back to the channel you were using, so it looked as if the
+Bot had stopped. The answer is now delivered to the conversation's channels, the way an answer after
+an approval already was.
+
 ### A personal edition for one person on one computer
 
 Set `OPENBOT_EDITION=personal`, with single-user mode and one computer, for an OpenBot without the

@@ -1016,6 +1016,7 @@ const signInService = computerGateway
               { id: messageId },
             );
           },
+          notify: (scope, input) => deliveryNotifications(scope, input),
         })(request),
     })
   : undefined;
