@@ -1,3 +1,4 @@
+import { SkillOwnedElsewhereError } from "../plugin-store/skills";
 import { PluginRefusedError } from "../store";
 import type { PluginRouteContext } from "./context";
 
@@ -112,8 +113,13 @@ export function mountSkillRoutes({
         ownerUserId: body.global ? null : actor.id,
         ...(tools === undefined ? {} : { tools }),
         by: actorEmail(context),
+        editor: actor,
       });
     } catch (error) {
+      // The name was free when it was checked above and somebody else's by the time it was saved.
+      if (error instanceof SkillOwnedElsewhereError) {
+        return context.json({ error: error.message }, 403);
+      }
       // A ref naming no tool this deployment has seen. Answered rather than thrown, because it is
       // something the person writing the skill can fix and the message says what to fix.
       if (error instanceof PluginRefusedError) {

@@ -146,6 +146,14 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   its tools to every Bot, including Bots made later. It can no longer be removed, and a Bot's
   Routines tools can no longer be taken away.
 
+### Two people saving a skill under the same new name cannot write into each other's
+
+Saving a skill checked whose the name was and then wrote it, so two people choosing the same new
+name at once both found it free: the first save made the skill theirs, and the second save's title
+and instructions replaced it, still owned by the first person and told to their Bots. The write now
+updates only a skill the person saving already owns, so the second save is refused with "is somebody
+else's skill" (403) and the first person's skill keeps their own text.
+
 ### A personal edition for one person on one computer
 
 Set `OPENBOT_EDITION=personal`, with single-user mode and one computer, for an OpenBot without the

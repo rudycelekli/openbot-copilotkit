@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { createAuditStore } from "../src/audit";
 import type { ActionPolicy } from "../src/computer/policy";
 import { createDatabase } from "../src/db/client";
@@ -96,6 +96,7 @@ afterAll(async () => {
         deploymentSkill,
         `written-${suite}`,
         `catalogue-${suite}`,
+        `raced-${suite}`,
       ]),
     );
   await database
@@ -285,6 +286,58 @@ describe("what a person may do over HTTP", () => {
     expect(edit.status).toBe(403);
     expect(remove.status).toBe(403);
     expect(await store.skillOwner(bobSkill)).toBe(bob);
+  });
+
+  /*
+   * Two people choosing the same new name at once each pass the route's ownership check, because
+   * neither skill exists yet when they are asked. The write is what has to decide: the second save
+   * must not put its text into the first person's skill, which their Bots would then be told.
+   */
+  test("cannot write into a skill somebody else saved under the same name a moment earlier", async () => {
+    const slug = `raced-${suite}`;
+    let arrived = 0;
+    let release: () => void = () => {};
+    const together = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const held = {
+      ...store,
+      async installSkill(input: Parameters<typeof store.installSkill>[0]) {
+        arrived += 1;
+        if (arrived === 2) release();
+        await together;
+        return store.installSkill(input);
+      },
+    };
+    const as = (actor: { id: string; email: string }) =>
+      createPluginRoutes(
+        held as never,
+        async (context, next) => {
+          context.set("actor", { ...actor, role: "user" } as never);
+          await next();
+        },
+        async () => true,
+      ).request("/skills", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          slug,
+          title: `${actor.id}'s`,
+          instructions: `Written by ${actor.id}.`,
+        }),
+      });
+
+    const answers = await Promise.all([
+      as({ id: alice, email: "alice@example.test" }),
+      as({ id: bob, email: "bob@example.test" }),
+    ]);
+
+    expect(answers.map((answer) => answer.status).sort()).toEqual([200, 403]);
+    const [saved] = await database
+      .select({ owner: skills.ownerUserId, instructions: skills.instructions })
+      .from(skills)
+      .where(eq(skills.slug, slug));
+    expect(saved?.instructions).toBe(`Written by ${saved?.owner}.`);
   });
 
   test("cannot edit the deployment's, which is an administrator's to keep", async () => {
