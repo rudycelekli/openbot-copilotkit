@@ -17,7 +17,7 @@
 import { randomUUID } from "node:crypto";
 import type { GrantedTool } from "@openbot/toolkit/granted-tool";
 import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { AuditInitiator, AuditStore } from "../audit";
 import { recordAuditEvent } from "../audit";
@@ -219,7 +219,17 @@ export function createWakeUpStore(
         .select()
         .from(workItems)
         .where(owned(ownerUserId, agentId))
-        .orderBy(asc(workItems.runAt))
+        /*
+         * What has not ended first, soonest due first, then the most recently ended. Ordered by due
+         * time alone, a Bot that had run a hundred follow-ups this week filled the page with the
+         * oldest finished ones, and the ones still waiting, which are always due last, fell off the
+         * end: `list_follow_ups` answered with nothing while the cap refused another.
+         */
+        .orderBy(
+          sql`${workItems.finishedAt} is not null`,
+          sql`case when ${workItems.finishedAt} is null then ${workItems.runAt} end`,
+          desc(workItems.finishedAt),
+        )
         .limit(100);
       return rows.map(toRecord);
     },

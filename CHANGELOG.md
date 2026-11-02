@@ -146,6 +146,14 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   its tools to every Bot, including Bots made later. It can no longer be removed, and a Bot's
   Routines tools can no longer be taken away.
 
+### A busy Bot still sees the follow-ups it has waiting
+
+A Bot's `list_follow_ups` read its follow-ups oldest-due first, at most a hundred, and finished ones
+are kept for a week. A Bot that checks back often, such as hourly on a build, passes a hundred in a
+few days, and its waiting follow-ups, always due last, fell off the end: it was told it had none
+while scheduling another was refused because five were waiting, and it could not find them to
+cancel. The list now puts waiting and running follow-ups first, then the most recently finished.
+
 ### A personal edition for one person on one computer
 
 Set `OPENBOT_EDITION=personal`, with single-user mode and one computer, for an OpenBot without the
