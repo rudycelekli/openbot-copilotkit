@@ -146,6 +146,13 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   its tools to every Bot, including Bots made later. It can no longer be removed, and a Bot's
   Routines tools can no longer be taken away.
 
+### Removing a saved approval rule is on the audit trail
+
+Saving or changing a personal approval rule wrote `approval.rule_changed`, and so did removing a
+team rule, but removing a personal one wrote nothing. Taking away an "Always allow" is the moment a
+Bot stops acting without asking, and the trail could not say when or by whom it happened. It now
+writes `approval.rule_changed` with `change: "revoked"` and `layer: "personal"`.
+
 ### A personal edition for one person on one computer
 
 Set `OPENBOT_EDITION=personal`, with single-user mode and one computer, for an OpenBot without the

@@ -310,6 +310,16 @@ export function createApprovalStore(database: Database): ApprovalStore {
         )
         .returning({ id: approvalRules.id });
       if (!rows.length) throw new ApprovalNotFoundError();
+      // On the trail like creating or changing one, and like revoking a team rule. Removing an
+      // "always allow" is what puts the person back in the loop, and without a row nobody could say
+      // when the Bot stopped acting on its own.
+      await recordAuditEvent(createAuditStore(database), {
+        eventType: "approval.rule_changed",
+        targetType: "approval_rule",
+        targetId: id,
+        actorUserId: owner,
+        payload: { change: "revoked", layer: "personal" },
+      });
     },
   };
 }
