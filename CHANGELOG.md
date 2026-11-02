@@ -146,6 +146,14 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   its tools to every Bot, including Bots made later. It can no longer be removed, and a Bot's
   Routines tools can no longer be taken away.
 
+### A follow-up that has started running is no longer reported as cancelled
+
+Cancelling a follow-up, from the Bot's Activity or by the Bot itself, only checked that it had not
+finished, so one a replica had already started was marked cancelled while its turn kept going: the
+Bot still replied in the conversation and the person was still notified, and the record then flipped
+back to how the turn went. A follow-up whose turn is running now refuses to be cancelled and says it
+has already started; one whose replica died mid-turn, and so will never run again, can still be.
+
 ### A personal edition for one person on one computer
 
 Set `OPENBOT_EDITION=personal`, with single-user mode and one computer, for an OpenBot without the

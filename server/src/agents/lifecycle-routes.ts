@@ -297,7 +297,7 @@ export function createBotLifecycleRoutes(
     const cancelled = await wakeUps.cancel(context.var.actor.id, agent.id, id);
     if (!cancelled)
       return context.json(
-        { error: "That follow-up has already run or was cancelled." },
+        { error: "That follow-up has already started or was cancelled." },
         404,
       );
     return context.json({ cancelled: true });

@@ -17,7 +17,7 @@
 import { randomUUID } from "node:crypto";
 import type { GrantedTool } from "@openbot/toolkit/granted-tool";
 import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, lte, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { AuditInitiator, AuditStore } from "../audit";
 import { recordAuditEvent } from "../audit";
@@ -224,7 +224,7 @@ export function createWakeUpStore(
       return rows.map(toRecord);
     },
 
-    /** Cancel one that has not started. False when it is not theirs, not there, or already over. */
+    /** Cancel one that has not started. False when it is not theirs, not there, running, or already over. */
     async cancel(
       ownerUserId: string,
       agentId: string,
@@ -257,6 +257,16 @@ export function createWakeUpStore(
             owned(ownerUserId, agentId),
             eq(workItems.key, id),
             isNull(workItems.finishedAt),
+            /*
+             * Not one a replica has claimed and is running. Marking it finished would not stop the
+             * turn: its reply still lands, the person is still notified, and the runner's settle
+             * then overwrites "cancelled" with how the turn went, so "cancelled" was never true.
+             * In the same update, so a sweep claiming it at this moment is decided by the row lock.
+             */
+            or(
+              isNull(workItems.leaseUntil),
+              lte(workItems.leaseUntil, sql`now()`),
+            ),
           ),
         )
         .returning({ key: workItems.key });
