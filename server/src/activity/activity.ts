@@ -16,6 +16,7 @@ import {
   gte,
   inArray,
   isNull,
+  lte,
   or,
   type SQL,
   sql,
@@ -309,7 +310,10 @@ export function createActivityStore(database: Database) {
           hop.claimedBy !== null &&
           hop.leaseUntil !== null &&
           hop.leaseUntil.getTime() > now;
-        const gaveUp = !hop.finishedAt && hop.attempts >= DEFAULT_MAX_ATTEMPTS;
+        // `claim` counts the attempt it starts, so the last try runs at the cap. It has given up only
+        // once that try's lease is gone; until then it is running, and still stoppable.
+        const gaveUp =
+          !hop.finishedAt && !running && hop.attempts >= DEFAULT_MAX_ATTEMPTS;
         const item: ActivityItem = {
           id: hop.key,
           kind: "handoff",
@@ -565,6 +569,11 @@ export function createActivityStore(database: Database) {
             eq(workItems.kind, HANDOFF_KIND),
             isNull(workItems.finishedAt),
             gte(workItems.attempts, DEFAULT_MAX_ATTEMPTS),
+            // Not while its last attempt is still running.
+            or(
+              isNull(workItems.leaseUntil),
+              lte(workItems.leaseUntil, sql`now()`),
+            ),
             sql`${workItems.payload}->>'actorId' = ${ownerUserId}`,
             sql`${workItems.payload}->>'answerIn' is null`,
           ),

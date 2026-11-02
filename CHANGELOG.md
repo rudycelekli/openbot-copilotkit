@@ -146,6 +146,14 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   its tools to every Bot, including Bots made later. It can no longer be removed, and a Bot's
   Routines tools can no longer be taken away.
 
+### A delegated task on its last attempt shows as running, not failed
+
+The queue counts an attempt when it claims it, so a delegated task's fifth and final try runs at the
+attempt cap. Activity read the cap alone as "gave up": while that last try was still working, the
+task showed as failed and waiting for you, could not be stopped, and added to the Bot's needs-you
+count. It now counts as given up only once that try's lease is gone, the rule the conversation's
+working indicator already used.
+
 ### A personal edition for one person on one computer
 
 Set `OPENBOT_EDITION=personal`, with single-user mode and one computer, for an OpenBot without the
