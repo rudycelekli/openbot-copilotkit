@@ -146,6 +146,10 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   its tools to every Bot, including Bots made later. It can no longer be removed, and a Bot's
   Routines tools can no longer be taken away.
 
+### The Recorder records a page's requests at the address the browser sends them to
+
+When Chrome would not let the Recorder use its debugger, the Recorder watched requests from inside the page and resolved a relative address against the page's own address. A browser resolves it against the page's `<base href>` when there is one, so on a site that sets one, such as many Angular apps, a step's request was recorded at an address that was never called: `api/orders/42/archive` on `/app/orders/42` with `<base href="/">` was recorded as `/app/orders/api/orders/42/archive`. It is now recorded at `/api/orders/42/archive`, the same address the debugger reports.
+
 ### A personal edition for one person on one computer
 
 Set `OPENBOT_EDITION=personal`, with single-user mode and one computer, for an OpenBot without the
