@@ -437,6 +437,8 @@ every deployment:
 
 ### Smaller changes
 
+- The Recorder reads a CopilotKit agent called `agent`, the name LangGraph's templates give a
+  graph, as CopilotKit does. Its runs were recorded with no agent, and its suggestions as runs.
 - In the OpenDots skin, the badge on Bots sits on the corner of the Bots icon. It used to hang
   off the button's corner, past the icon and almost on the rail's edge. A count is now a smaller
   circle, so the icon still shows under it. The badge on the menu button in a narrow window

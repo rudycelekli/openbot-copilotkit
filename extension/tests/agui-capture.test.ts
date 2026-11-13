@@ -20,6 +20,7 @@ import {
 import {
   AGUI_PROTO_TYPE,
   isRuntimeInfoAnswer,
+  matchRun,
   matchRuntimeInfoRequest,
 } from "../src/shared/agui";
 import { clientEvents, phoenixFrame } from "./support/agui-client";
@@ -741,4 +742,29 @@ test("the debugger capture says a page runs CopilotKit once its runtime answered
       ),
     },
   ]);
+});
+
+test("an agent named agent has its CopilotKit routes read from the path's end, as the runtime reads them", () => {
+  const base = "https://app.example.test/api/copilotkit/agent/agent";
+  const body = JSON.stringify({ threadId: "t1", runId: "r1", messages: [] });
+  expect(matchRun(`${base}/run`, "POST", body)).toMatchObject({
+    kind: "run",
+    method: "agent/run",
+    agentId: "agent",
+    threadId: "t1",
+  });
+  expect(matchRun(`${base}/connect`, "POST", body)).toMatchObject({
+    kind: "run",
+    method: "agent/connect",
+    agentId: "agent",
+  });
+  // A suggestion streams AG-UI too, and is never a run.
+  expect(matchRun(`${base}/suggest`, "POST", body)).toMatchObject({
+    kind: "none",
+    agentId: "agent",
+  });
+  expect(matchRun(`${base}/stop/t1`, "POST", undefined)).toMatchObject({
+    kind: "none",
+    agentId: "agent",
+  });
 });

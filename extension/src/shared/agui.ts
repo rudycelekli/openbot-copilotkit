@@ -84,13 +84,16 @@ function agentRoute(
     return null;
   }
   const segments = path.split("/").filter(Boolean);
-  const at = segments.lastIndexOf("agent");
-  if (at < 0 || at + 2 >= segments.length) return null;
-  const action = segments[at + 2] ?? "";
-  const rest = segments.length - at - 3;
-  // `/agent/<id>/run|connect|suggest` end the path; `/agent/<id>/stop/<threadId>` has one more segment.
-  if ((action === "stop" && rest === 1) || rest === 0)
-    return { action, agentId: decodeSegment(segments[at + 1] ?? "") };
+  const n = segments.length;
+  // `/agent/<id>/run|connect|suggest` end the path; `/agent/<id>/stop/<threadId>` has one more segment. Counted from
+  // the end, so an agent whose id is itself "agent" (`/agent/agent/run`) is read as the router reads it.
+  if (n >= 4 && segments[n - 4] === "agent" && segments[n - 2] === "stop")
+    return { action: "stop", agentId: decodeSegment(segments[n - 3] ?? "") };
+  if (n >= 3 && segments[n - 3] === "agent")
+    return {
+      action: segments[n - 1] ?? "",
+      agentId: decodeSegment(segments[n - 2] ?? ""),
+    };
   return null;
 }
 
