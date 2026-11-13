@@ -437,6 +437,10 @@ every deployment:
 
 ### Smaller changes
 
+- Asking for several apps at once cannot take a person past 20 waiting requests. The cap was counted
+  by the route and written by the store, so requests sent together each counted under the cap and
+  each filed. The count and the write now happen under one lock per person, and the request over the
+  cap is refused with the same 429 and `too_many_pending` audit row as before.
 - In the OpenDots skin, the badge on Bots sits on the corner of the Bots icon. It used to hang
   off the button's corner, past the icon and almost on the rail's edge. A count is now a smaller
   circle, so the icon still shows under it. The badge on the menu button in a narrow window

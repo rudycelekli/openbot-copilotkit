@@ -156,6 +156,12 @@ const enabled: string[] = [];
  */
 let beforeGrant: (() => Promise<void>) | null = null;
 
+/**
+ * Run before every request the routes file, when set — how a test holds two filings at the point
+ * where each has passed every check the route makes on its own and only the write is left.
+ */
+let beforeFile: (() => Promise<void>) | null = null;
+
 function storeFor(db = database): PluginStore {
   const real = createPluginStore({
     brokerProvider: "composio",
@@ -172,6 +178,10 @@ function storeFor(db = database): PluginStore {
     async grant(...args) {
       await beforeGrant?.();
       return real.grant(...args);
+    },
+    async fileAppAccessRequest(...args) {
+      await beforeFile?.();
+      return real.fileAppAccessRequest(...args);
     },
     async addBrokeredApp(input) {
       enabled.push(input.slug);
@@ -365,6 +375,7 @@ beforeEach(async () => {
   events.length = 0;
   enabled.length = 0;
   beforeGrant = null;
+  beforeFile = null;
   await clearApps();
 });
 
@@ -1598,6 +1609,49 @@ describe("what a request may carry", () => {
     const again = await ask(CALENDAR);
     expect(again.status).toBe(200);
     expect((await json<{ created: boolean }>(again)).created).toBe(false);
+  });
+
+  test(`two filings at once cannot take a person past ${MAX_PENDING_REQUESTS} waiting`, async () => {
+    await database.insert(appAccessRequests).values(
+      Array.from({ length: MAX_PENDING_REQUESTS - 1 }, (_, index) => ({
+        id: randomUUID(),
+        requestedBy: person,
+        agentId: bot,
+        appKey: `composio-filler${index}_${suite}`,
+        appTitle: `Filler ${index}`,
+        kind: "enable" as const,
+      })),
+    );
+    await seedApp({ key: CALENDAR, title: "Google Calendar", grant: false });
+    /*
+     * Both filings are let through to the write together, as two replicas answering two presses
+     * would be: each has read the person's waiting requests before the other has written one.
+     */
+    let arrived = 0;
+    let release: () => void = () => {};
+    const together = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    beforeFile = async () => {
+      arrived += 1;
+      if (arrived === 2) release();
+      await together;
+    };
+    const answers = await Promise.all([ask(CALENDAR), ask("Dropbox")]);
+    expect(answers.map((answer) => answer.status).sort()).toEqual([201, 429]);
+    const waiting = await database
+      .select({ id: appAccessRequests.id })
+      .from(appAccessRequests)
+      .where(
+        and(
+          eq(appAccessRequests.requestedBy, person),
+          eq(appAccessRequests.status, "pending"),
+        ),
+      );
+    expect(waiting).toHaveLength(MAX_PENDING_REQUESTS);
+    expect(eventsOf("app_access.refused").at(-1)?.payload).toMatchObject({
+      reason: "too_many_pending",
+    });
   });
 });
 

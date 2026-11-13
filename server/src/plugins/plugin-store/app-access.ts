@@ -9,8 +9,10 @@ import {
   isNull,
   or,
   type SQL,
+  sql,
 } from "drizzle-orm";
 import { type AuditEventInput, recordAuditEvent } from "../../audit";
+import type { Database } from "../../db/client";
 import {
   agentProfiles,
   agents,
@@ -181,6 +183,20 @@ function isUniqueViolation(error: unknown): boolean {
     error as Driver | null | undefined,
     (error as { cause?: Driver } | null | undefined)?.cause,
   ].some((candidate) => candidate?.errno === "23505");
+}
+
+type Handle = Database | Parameters<Parameters<Database["transaction"]>[0]>[0];
+
+/**
+ * A filing refused because this person already has `cap` requests waiting. Thrown by
+ * `fileAppAccessRequest` only when it was given a cap, and only after the person's one already
+ * waiting for the same thing has been looked for, so asking again is never what trips it.
+ */
+export class PendingRequestCapError extends Error {
+  constructor(readonly cap: number) {
+    super(`${cap} requests are already waiting.`);
+    this.name = "PendingRequestCapError";
+  }
 }
 
 /**
@@ -912,8 +928,11 @@ export function appAccessMethods(context: StoreContext) {
     };
   }
 
-  async function requestRows(where: SQL | undefined) {
-    const rows = await database
+  async function requestRows(
+    where: SQL | undefined,
+    handle: Handle = database,
+  ) {
+    const rows = await handle
       .select(requestColumns)
       .from(appAccessRequests)
       .leftJoin(agents, eq(agents.id, appAccessRequests.agentId))
@@ -1153,61 +1172,91 @@ export function appAccessMethods(context: StoreContext) {
       appKey: string;
       appTitle: string;
       kind: AppAccessRequestKind;
+      /**
+       * How many requests this person may have waiting. Counted under a lock held for this person
+       * until the filing commits, so two filings at once cannot both count one under it and both
+       * insert. See {@link PendingRequestCapError}.
+       */
+      cap?: number;
     }): Promise<{ request: AppAccessRequestRecord; created: boolean }> {
-      for (let attempt = 0; attempt < 2; attempt += 1) {
-        const id = randomUUID();
-        const inserted = await database
-          .insert(appAccessRequests)
-          .values({ id, ...input })
-          .onConflictDoNothing()
-          .returning({ id: appAccessRequests.id });
-        const [request] = await requestRows(
-          inserted.length > 0
-            ? eq(appAccessRequests.id, id)
-            : and(
-                eq(appAccessRequests.requestedBy, input.requestedBy),
-                eq(appAccessRequests.appKey, input.appKey),
-                eq(appAccessRequests.kind, input.kind),
-                eq(appAccessRequests.status, "pending"),
-                input.agentId === null
-                  ? isNull(appAccessRequests.agentId)
-                  : eq(appAccessRequests.agentId, input.agentId),
-              ),
-        );
-        if (request) {
-          if (inserted.length > 0)
-            await recordAuditEvent(auditStore, {
-              eventType: "app_access.requested",
-              targetType: "mcp_server",
-              targetId: input.appKey,
-              actorUserId: input.requestedBy,
-              payload: {
-                request: id,
-                app: input.appKey,
-                bot: input.agentId,
-                kind: input.kind,
-              },
-            });
-          return { request, created: inserted.length > 0 };
-        }
-      }
-      throw new Error(
-        `A request for ${input.appKey} was neither filed nor found pending.`,
+      const { cap, ...values } = input;
+      const waiting = and(
+        eq(appAccessRequests.requestedBy, values.requestedBy),
+        eq(appAccessRequests.appKey, values.appKey),
+        eq(appAccessRequests.kind, values.kind),
+        eq(appAccessRequests.status, "pending"),
+        values.agentId === null
+          ? isNull(appAccessRequests.agentId)
+          : eq(appAccessRequests.agentId, values.agentId),
       );
-    },
-
-    /** How many requests this person has waiting, across every app and Bot. */
-    async countPendingAppAccessRequests(requestedBy: string): Promise<number> {
-      const [row] = await database
-        .select({ count: count() })
-        .from(appAccessRequests)
-        .where(
-          and(
-            eq(appAccessRequests.requestedBy, requestedBy),
-            eq(appAccessRequests.status, "pending"),
-          ),
+      const file = async (handle: Handle) => {
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          const id = randomUUID();
+          const inserted = await handle
+            .insert(appAccessRequests)
+            .values({ id, ...values })
+            .onConflictDoNothing()
+            .returning({ id: appAccessRequests.id });
+          const [request] = await requestRows(
+            inserted.length > 0 ? eq(appAccessRequests.id, id) : waiting,
+            handle,
+          );
+          if (request) return { request, created: inserted.length > 0 };
+        }
+        throw new Error(
+          `A request for ${values.appKey} was neither filed nor found pending.`,
         );
-      return row?.count ?? 0;
+      };
+
+      /*
+       * THE CAP IS COUNTED AND WRITTEN UNDER ONE LOCK, OR IT IS NOT A CAP.
+       *
+       * It used to be counted by the route and written here, and two filings at once — two
+       * replicas, two presses — both counted one under it and both inserted, so the person held
+       * one past it, and as many past it as they sent at once. An advisory lock rather than a row
+       * lock because the thing guarded is a COUNT, which no one row's `for update` covers; the
+       * `routines` cap is held the same way. Transaction-scoped, so the commit or the rollback
+       * releases it. The one already waiting is looked for first, under the same lock, so a person
+       * at the cap asking again is answered with it rather than refused.
+       */
+      const filed =
+        cap === undefined
+          ? await file(database)
+          : await database.transaction(async (transaction) => {
+              await transaction.execute(
+                sql`select pg_advisory_xact_lock(hashtext(${`app-access-requests-${values.requestedBy}`}))`,
+              );
+              const [already] = await requestRows(waiting, transaction);
+              if (already) return { request: already, created: false };
+              const [held] = await transaction
+                .select({ count: count() })
+                .from(appAccessRequests)
+                .where(
+                  and(
+                    eq(appAccessRequests.requestedBy, values.requestedBy),
+                    eq(appAccessRequests.status, "pending"),
+                  ),
+                );
+              if ((held?.count ?? 0) >= cap)
+                throw new PendingRequestCapError(cap);
+              return file(transaction);
+            });
+
+      // After the commit, so the trail never names a request a rolled-back filing did not keep.
+      if (filed.created)
+        await recordAuditEvent(auditStore, {
+          eventType: "app_access.requested",
+          targetType: "mcp_server",
+          targetId: values.appKey,
+          actorUserId: values.requestedBy,
+          payload: {
+            request: filed.request.id,
+            app: values.appKey,
+            bot: values.agentId,
+            kind: values.kind,
+          },
+        });
+      return filed;
     },
 
     /**
