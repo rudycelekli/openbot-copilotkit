@@ -128,10 +128,25 @@ export function readConnectPrompt(
 ): ConnectPrompt | null {
   if (!text?.startsWith(CONNECT_APP_MARKER)) return null;
   const rest = text.slice(CONNECT_APP_MARKER.length);
-  const end = rest.indexOf("}");
+  /*
+   * The JSON ends at the first brace that closes it, not at the first brace. An app's title is
+   * whatever an administrator typed when adding the server, and `JSON.stringify` leaves a `}` inside
+   * a string as it is, so the first `}` can sit in the middle of the title. Each closing brace is
+   * tried in turn, and the first one that makes a whole JSON value is the end of it: a brace inside
+   * a string never does, because the string is still open there.
+   */
+  let end = rest.indexOf("}");
+  let parsed: unknown;
+  for (; end >= 0; end = rest.indexOf("}", end + 1)) {
+    try {
+      parsed = JSON.parse(rest.slice(0, end + 1));
+      break;
+    } catch {
+      // Not the end yet: that brace was inside a string, or the text is not JSON at all.
+    }
+  }
   if (end < 0) return null;
   try {
-    const parsed: unknown = JSON.parse(rest.slice(0, end + 1));
     if (!parsed || typeof parsed !== "object") return null;
     const { serverId, title, agentId, reason, at, blocked } = parsed as {
       serverId?: unknown;

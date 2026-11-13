@@ -34,6 +34,27 @@ describe("a refusal asking somebody to connect an app", () => {
     );
     expect(text.startsWith(CONNECT_APP_MARKER)).toBe(true);
   });
+
+  test("survives the round trip when the app's title has a closing brace in it", () => {
+    // An administrator names a server they add by URL, and nothing stops that name holding a brace.
+    const text = connectAppRefusal({
+      serverId: "deploys-staging",
+      title: "Deploys {staging}",
+      message: "You have not connected your Deploys {staging} account.",
+      agentId: "release",
+      reason: "access",
+      blocked: true,
+    });
+
+    expect(readConnectPrompt(text)).toEqual({
+      serverId: "deploys-staging",
+      title: "Deploys {staging}",
+      message: "You have not connected your Deploys {staging} account.",
+      agentId: "release",
+      reason: "access",
+      blocked: true,
+    });
+  });
 });
 
 describe("text that is not one", () => {

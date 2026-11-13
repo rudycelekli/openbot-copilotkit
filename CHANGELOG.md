@@ -437,6 +437,10 @@ every deployment:
 
 ### Smaller changes
 
+- An app whose name has a `}` in it gets its app card. The card a conversation draws for an app a
+  Bot cannot use yet was read from JSON cut at the first `}`, so a server added by URL under a name
+  such as `Deploys {staging}` showed its raw marker text instead of a Connect button, and
+  `show_app_access` showed nothing. The JSON is now read to the brace that actually closes it.
 - In the OpenDots skin, the badge on Bots sits on the corner of the Bots icon. It used to hang
   off the button's corner, past the icon and almost on the rail's edge. A count is now a smaller
   circle, so the icon still shows under it. The badge on the menu button in a narrow window
