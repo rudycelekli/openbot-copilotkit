@@ -41,6 +41,16 @@ export function createSignInResumer(deps: {
     text: string;
     messageId: string;
   }): Promise<void>;
+  /**
+   * Deliver the continued reply to the conversation's channels (Slack, SMS, push), as the approval
+   * sweep does for a turn continued after an approval. A turn that began on one of those channels
+   * sent its sign-in link there, and its answer belongs there too: recorded alone, it only reaches
+   * somebody who opens the app.
+   */
+  notify(
+    scope: DeliveryScope,
+    input: { id: string; text: string; kind: "reply" },
+  ): Promise<unknown>;
 }) {
   return async (request: SignInRequestRecord) => {
     if (!request.continuation) return;
@@ -77,7 +87,7 @@ export function createSignInResumer(deps: {
       request.ownerUserId,
       snapshot.threadId,
     );
-    if (channelId && outcome.replyText)
+    if (channelId && outcome.replyText) {
       await deps.recordReply({
         ownerUserId: request.ownerUserId,
         channelId,
@@ -85,6 +95,16 @@ export function createSignInResumer(deps: {
         text: outcome.replyText,
         messageId,
       });
+      await deps.notify(
+        {
+          ownerUserId: request.ownerUserId,
+          channelId,
+          agentId: request.botId,
+          threadId: snapshot.threadId,
+        },
+        { id: messageId, text: outcome.replyText, kind: "reply" },
+      );
+    }
     // A routine firing that was waiting on this sign-in is finished now, as after an approval.
     await deps.database
       .update(routineRuns)

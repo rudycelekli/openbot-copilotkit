@@ -437,6 +437,10 @@ every deployment:
 
 ### Smaller changes
 
+- A Bot's answer after a sign-in reaches you where you asked. When a Bot working from Slack, SMS or
+  a routine needed you to sign in to a site, its continued answer was only written to the
+  conversation in the app, so on the channel you were using it looked as if the Bot had stopped. It
+  is now delivered to the conversation's channels, as an answer after an approval already was.
 - In the OpenDots skin, the badge on Bots sits on the corner of the Bots icon. It used to hang
   off the button's corner, past the icon and almost on the rail's edge. A count is now a smaller
   circle, so the icon still shows under it. The badge on the menu button in a narrow window
