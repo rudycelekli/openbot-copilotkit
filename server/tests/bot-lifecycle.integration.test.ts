@@ -602,6 +602,63 @@ describe("follow-ups", () => {
     expect(await wakeUps.cancel(owner, bot, scheduled[0]!.id)).toBe(true);
     expect(await wakeUps.cancel(owner, bot, scheduled[0]!.id)).toBe(false);
   });
+
+  test("the waiting ones are listed however many have already run", async () => {
+    // A week of hourly check-ins: more finished follow-ups than one listing holds, all due before
+    // the one still waiting.
+    const chatty = `${prefix}-chatty`;
+    const hour = 3_600_000;
+    await database.insert(workItems).values(
+      Array.from({ length: 110 }, (_, index) => {
+        const dueAt = new Date(Date.now() - (156 - index) * hour);
+        return {
+          kind: WAKE_UP_KIND,
+          createdAt: new Date(dueAt.getTime() - hour),
+          key: `wake:${JSON.stringify([owner, chatty])}:${prefix}-done-${index}`,
+          runAt: dueAt,
+          finishedAt: dueAt,
+          attempts: 1,
+          payload: {
+            ownerUserId: owner,
+            agentId: chatty,
+            reason: `check ${index}`,
+            dueAt: dueAt.toISOString(),
+            scheduledAt: dueAt.toISOString(),
+            outcome: { status: "succeeded", at: dueAt.toISOString() },
+          },
+        };
+      }),
+    );
+    const waiting = await wakeUps.schedule({
+      ownerUserId: owner,
+      agentId: chatty,
+      reason: "check the build again",
+      dueAt: new Date(Date.now() + 3_600_000),
+    });
+
+    const listed = await wakeUps.list(owner, chatty);
+    expect(
+      listed
+        .filter((record) => record.state !== "done")
+        .map((record) => record.id),
+    ).toEqual([waiting.id]);
+
+    const listTool = wakeUpTools({
+      store: wakeUps,
+      ownerUserId: owner,
+      agentId: chatty,
+    }).find((tool) => tool.name === "list_follow_ups");
+    expect(JSON.parse(await listTool!.execute({}))).toEqual([
+      {
+        id: waiting.id,
+        reason: "check the build again",
+        dueAt: waiting.dueAt,
+        state: "scheduled",
+      },
+    ]);
+    // Not left waiting for the reset below, which counts what this person still has scheduled.
+    expect(await wakeUps.cancel(owner, chatty, waiting.id)).toBe(true);
+  });
 });
 
 describe("update routing", () => {

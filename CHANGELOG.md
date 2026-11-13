@@ -437,6 +437,10 @@ every deployment:
 
 ### Smaller changes
 
+- A busy Bot still sees the follow-ups it has waiting. `list_follow_ups` read at most a hundred,
+  oldest due first, and finished ones are kept for a week, so a Bot that checks back hourly lost its
+  waiting follow-ups off the end: it was told it had none, while scheduling another was refused
+  because five were waiting. The list now puts waiting and running follow-ups first.
 - In the OpenDots skin, the badge on Bots sits on the corner of the Bots icon. It used to hang
   off the button's corner, past the icon and almost on the rail's edge. A count is now a smaller
   circle, so the icon still shows under it. The badge on the menu button in a narrow window
