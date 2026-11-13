@@ -437,6 +437,10 @@ every deployment:
 
 ### Smaller changes
 
+- A delivered text message stays delivered. Twilio sends a text's `sent` and then its `delivered`
+  or `undelivered` status as separate callbacks, and does not promise they arrive in order. When
+  `sent` landed last, delivery history moved a delivered text back to sent, and a failed one back to
+  sent with its error code cleared. A late `sent` now leaves a delivered or failed text as it is.
 - In the OpenDots skin, the badge on Bots sits on the corner of the Bots icon. It used to hang
   off the button's corner, past the icon and almost on the rail's edge. A count is now a smaller
   circle, so the icon still shows under it. The badge on the menu button in a narrow window

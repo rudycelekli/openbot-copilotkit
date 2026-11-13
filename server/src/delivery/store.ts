@@ -1,5 +1,15 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  notInArray,
+  or,
+  sql,
+} from "drizzle-orm";
 import type { Database } from "../db/client";
 import { agents } from "../db/schema/core";
 import { agentProfiles } from "../db/schema/coworker";
@@ -488,6 +498,11 @@ export function createDeliveryStore(database: Database) {
           and(
             eq(deliveryOutbox.transport, "sms"),
             eq(deliveryOutbox.providerId, providerId),
+            // Twilio does not promise its callbacks arrive in order, so a `sent` that lands after
+            // `delivered` or `undelivered` is stale and must not undo the final outcome.
+            ...(state === "sent"
+              ? [notInArray(deliveryOutbox.state, ["delivered", "failed"])]
+              : []),
           ),
         );
     },
