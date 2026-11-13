@@ -437,6 +437,10 @@ every deployment:
 
 ### Smaller changes
 
+- A delegated task on its last attempt shows as running, not failed. The queue counts an attempt
+  when it claims it, so the fifth and final try runs at the cap, and Activity read the cap alone as
+  "gave up": while that try worked, the task showed failed and waiting for you, could not be
+  stopped, and added to the Bot's needs-you count. It now gives up only once that try's lease is gone.
 - In the OpenDots skin, the badge on Bots sits on the corner of the Bots icon. It used to hang
   off the button's corner, past the icon and almost on the rail's edge. A count is now a smaller
   circle, so the icon still shows under it. The badge on the menu button in a narrow window

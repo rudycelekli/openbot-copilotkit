@@ -541,6 +541,42 @@ describe("Activity and attention", () => {
     );
   });
 
+  test("a delegated task on its last attempt is running, not failed, while its lease is live", async () => {
+    const key = `${prefix}-hop-last-attempt`;
+    // `claim` counts the attempt it starts, so the fifth try runs with attempts = 5 and a live lease.
+    await database.insert(workItems).values({
+      kind: HANDOFF_KIND,
+      key,
+      attempts: 5,
+      claimedBy: "another-replica",
+      leaseUntil: new Date(Date.now() + 60_000),
+      payload: {
+        fromBotId: bot,
+        toBotId: helper,
+        actorId: owner,
+        threadId: `${prefix}-thread-${owner}`,
+        task: "Reconcile the ledger",
+        toName: "Helper Bot",
+      },
+    });
+    try {
+      const result = await activity.forBot(owner, bot);
+      const item = result.inProgress.find((entry) => entry.id === key);
+      expect(item).toMatchObject({
+        status: "running",
+        needsYou: false,
+        stoppable: true,
+      });
+      const [row] = (await activity.attention(owner)).filter(
+        (entry) => entry.agentId === bot,
+      );
+      // Only the hop that really gave up waits on the person.
+      expect(row?.handoffs).toBe(1);
+    } finally {
+      await database.delete(workItems).where(eq(workItems.key, key));
+    }
+  });
+
   test("stopping a delegated task finishes only that person's hop", async () => {
     expect(
       await activity.stopHandoff(other, bot, `${prefix}-hop-queued`),
