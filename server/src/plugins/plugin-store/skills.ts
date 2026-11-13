@@ -14,6 +14,17 @@ import { currentEdition } from "../../edition";
 import type { StoreContext } from "./context";
 import { PluginRefusedError, type SkillActor, type SkillRecord } from "./model";
 
+/**
+ * A save refused because the skill under that name is somebody else's. Raised by `installSkill`
+ * when it is told who is saving and that person may not edit the skill already there.
+ */
+export class SkillOwnedElsewhereError extends Error {
+  constructor(slug: string) {
+    super(`${slug} is somebody else's skill.`);
+    this.name = "SkillOwnedElsewhereError";
+  }
+}
+
 /** Skills, and what the store answers about Bots and servers for the routes and the desk. */
 export function skillMethods(context: StoreContext) {
   const { database, auditStore, grantsFor, toolsDeclaredBy, knownToolRefs } =
@@ -185,6 +196,12 @@ export function skillMethods(context: StoreContext) {
        */
       tools?: string[];
       by: string;
+      /**
+       * Who is saving, when a person is. Someone who is not an administrator may only write over a
+       * skill that is already theirs, and that is decided by the write itself rather than by a read
+       * before it. See {@link SkillOwnedElsewhereError}.
+       */
+      editor?: SkillActor;
     }): Promise<void> {
       /*
        * Checked before anything is written, so a save is all-or-nothing from the caller's side: a
@@ -208,7 +225,7 @@ export function skillMethods(context: StoreContext) {
         }
       }
 
-      await database
+      const written = await database
         .insert(skills)
         .values({
           id: input.slug,
@@ -244,7 +261,21 @@ export function skillMethods(context: StoreContext) {
             origin: input.origin ?? "yours",
             updatedAt: new Date(),
           },
-        });
+          /*
+           * THE OWNERSHIP CHECK IS PART OF THE WRITE, NOT ONLY A READ BEFORE IT.
+           *
+           * The route asks whose a slug is before saving, and for a slug nobody has used yet the
+           * answer is "nobody's" — so two people saving the same new name at once both passed,
+           * the first insert made it the first person's, and the second save's update put its text
+           * into that skill, which the first person's Bots are then told. Conditioned on the owner,
+           * the second save updates nothing and is refused instead.
+           */
+          ...(input.editor && !input.editor.isAdmin
+            ? { setWhere: eq(skills.ownerUserId, input.editor.id) }
+            : {}),
+        })
+        .returning({ id: skills.id });
+      if (written.length === 0) throw new SkillOwnedElsewhereError(input.slug);
 
       /*
        * Replaced wholesale rather than merged. What a skill needs is a set the author is editing, so

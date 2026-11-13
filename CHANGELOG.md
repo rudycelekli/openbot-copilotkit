@@ -437,6 +437,10 @@ every deployment:
 
 ### Smaller changes
 
+- Two people saving a skill under the same new name cannot write into each other's. Both found the
+  name free, the first save made the skill theirs, and the second save's text replaced it, still
+  owned by the first person and told to their Bots. The write now updates only a skill the person
+  saving owns, so the second save is refused with "is somebody else's skill" (403).
 - In the OpenDots skin, the badge on Bots sits on the corner of the Bots icon. It used to hang
   off the button's corner, past the icon and almost on the rail's edge. A count is now a smaller
   circle, so the icon still shows under it. The badge on the menu button in a narrow window
