@@ -275,6 +275,45 @@ test("a saved rule is changed in place, only by its owner, and the change is on 
   ).toHaveLength(2);
 });
 
+test("removing a saved rule is on the trail, like saving and changing one", async () => {
+  const rule = await service.createRule(owner, {
+    botId: "*",
+    toolRef: "mcp/drive/*",
+    effect: "*",
+    scope: "*",
+    behaviour: "allow",
+  });
+  // Somebody else's id, and one already removed, are not removals and leave nothing behind.
+  await expect(service.revoke(admin, rule.id)).rejects.toThrow(
+    "could not be found",
+  );
+  await service.revoke(owner, rule.id);
+  await expect(service.revoke(owner, rule.id)).rejects.toThrow(
+    "could not be found",
+  );
+  const rows = await database
+    .select()
+    .from(auditEvents)
+    .where(
+      and(
+        eq(auditEvents.eventType, "approval.rule_changed"),
+        eq(auditEvents.targetId, rule.id),
+      ),
+    );
+  expect(
+    rows
+      .filter(
+        (row) => (row.payload as { change?: string }).change === "revoked",
+      )
+      .map((row) => ({ actor: row.actorUserId, payload: row.payload })),
+  ).toEqual([
+    {
+      actor: owner,
+      payload: { change: "revoked", layer: "personal" },
+    },
+  ]);
+});
+
 test("declining one connector call does not decline a different call to the same tool", async () => {
   await store.setEnabled(owner, true);
   const thread = `${prefix}-thread-equivalence`;

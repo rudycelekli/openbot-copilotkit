@@ -437,6 +437,10 @@ every deployment:
 
 ### Smaller changes
 
+- Removing a saved approval rule is on the audit trail. Saving or changing a personal approval rule
+  wrote `approval.rule_changed`, and so did removing a team rule, but removing a personal one wrote
+  nothing, so the trail could not say when a Bot stopped acting without asking. It now writes
+  `approval.rule_changed` with `change: "revoked"` and `layer: "personal"`.
 - In the OpenDots skin, the badge on Bots sits on the corner of the Bots icon. It used to hang
   off the button's corner, past the icon and almost on the rail's edge. A count is now a smaller
   circle, so the icon still shows under it. The badge on the menu button in a narrow window
