@@ -602,6 +602,47 @@ describe("follow-ups", () => {
     expect(await wakeUps.cancel(owner, bot, scheduled[0]!.id)).toBe(true);
     expect(await wakeUps.cancel(owner, bot, scheduled[0]!.id)).toBe(false);
   });
+
+  test("one that has started running cannot be cancelled", async () => {
+    const busy = `${prefix}-busy`;
+    const followUp = await wakeUps.schedule({
+      ownerUserId: owner,
+      agentId: busy,
+      reason: "check the deploy",
+      dueAt: new Date(Date.now() + 120_000),
+    });
+    // A replica's sweep has claimed it and its turn is under way: what `claim` writes.
+    await database
+      .update(workItems)
+      .set({
+        runAt: sql`now() - interval '1 second'`,
+        claimedBy: `${prefix}-replica`,
+        leaseUntil: sql`now() + interval '15 minutes'`,
+        attempts: 1,
+      })
+      .where(
+        and(eq(workItems.kind, WAKE_UP_KIND), eq(workItems.key, followUp.id)),
+      );
+
+    expect(await wakeUps.cancel(owner, busy, followUp.id)).toBe(false);
+    const [row] = await database
+      .select({ finishedAt: workItems.finishedAt })
+      .from(workItems)
+      .where(
+        and(eq(workItems.kind, WAKE_UP_KIND), eq(workItems.key, followUp.id)),
+      );
+    expect(row?.finishedAt).toBeNull();
+    expect((await wakeUps.list(owner, busy))[0]?.state).toBe("running");
+
+    // The replica died and nothing will run it again: then it can be cancelled.
+    await database
+      .update(workItems)
+      .set({ leaseUntil: sql`now() - interval '1 second'` })
+      .where(
+        and(eq(workItems.kind, WAKE_UP_KIND), eq(workItems.key, followUp.id)),
+      );
+    expect(await wakeUps.cancel(owner, busy, followUp.id)).toBe(true);
+  });
 });
 
 describe("update routing", () => {

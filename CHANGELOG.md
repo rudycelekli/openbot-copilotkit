@@ -437,6 +437,10 @@ every deployment:
 
 ### Smaller changes
 
+- A follow-up that has started running is no longer reported as cancelled. Cancelling one only
+  checked that it had not finished, so a follow-up a replica had already started was marked
+  cancelled while its turn kept going and the Bot still replied. A running follow-up now refuses to
+  be cancelled and says it has already started; one whose replica died mid-turn still can be.
 - In the OpenDots skin, the badge on Bots sits on the corner of the Bots icon. It used to hang
   off the button's corner, past the icon and almost on the rail's edge. A count is now a smaller
   circle, so the icon still shows under it. The badge on the menu button in a narrow window
